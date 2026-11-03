@@ -1,0 +1,1332 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>예의를 가져가~! 3D</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css');
+        
+        * {
+            font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif;
+            touch-action: manipulation;
+            user-select: none;
+            -webkit-user-select: none;
+            -webkit-touch-callout: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        html, body {
+            width: 100%;
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background-color: #020617;
+            color: #ffffff;
+        }
+
+        /* 3D Canvas Container */
+        #webgl-container {
+            width: 100%;
+            height: 100%;
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 0;
+        }
+
+        /* Giant Pop-Up Text Animation */
+        @keyframes giantPop {
+            0% {
+                opacity: 0;
+                transform: translate(-50%, -40%) scale(0.3) rotate(-5deg);
+            }
+            30% {
+                opacity: 1;
+                transform: translate(-50%, -50%) scale(1.3) rotate(2deg);
+            }
+            70% {
+                opacity: 1;
+                transform: translate(-50%, -55%) scale(1.1) rotate(0deg);
+            }
+            100% {
+                opacity: 0;
+                transform: translate(-50%, -70%) scale(0.8) rotate(3deg);
+            }
+        }
+
+        .giant-greeting-popup {
+            position: absolute;
+            will-change: transform, opacity;
+            left: 50%;
+            top: 42%;
+            transform: translate(-50%, -50%);
+            animation: giantPop 0.85s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+            pointer-events: none;
+            z-index: 50;
+            white-space: nowrap;
+            text-shadow: 0 0 10px rgba(245, 158, 11, 0.5), 0 2px 6px rgba(0,0,0,0.8);
+        }
+
+        @keyframes popJudgement {
+            0% { opacity: 1; transform: translate(-50%, 0) scale(0.7); }
+            50% { opacity: 1; transform: translate(-50%, -20px) scale(1.2); }
+            100% { opacity: 0; transform: translate(-50%, -45px) scale(0.9); }
+        }
+
+        .judgement-text {
+            position: absolute;
+            will-change: transform, opacity;
+            left: 50%;
+            transform: translateX(-50%);
+            animation: popJudgement 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+            pointer-events: none;
+            white-space: nowrap;
+        }
+
+        .btn-active-effect {
+            transition: all 0.08s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .btn-active-effect:active {
+            transform: scale(0.92) translateY(4px);
+            filter: brightness(1.15);
+        }
+
+        #home-button {
+            position: fixed;
+            top: calc(env(safe-area-inset-top, 0px) + 56px);
+            right: max(7px, env(safe-area-inset-right, 0px));
+            z-index: 60;
+            width: 36px;
+            height: 36px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0,0,0,.4);
+        }
+
+        @media (max-width: 600px) {
+            header { padding-left: 6px !important; padding-right: 6px !important; gap: 4px; }
+            header > div { gap: 4px !important; }
+            #bgm-toggle-btn { padding: 5px 7px !important; font-size: 10px !important; }
+            #bgm-label { display: none; }
+            #hud-hearts { gap: 1px !important; padding: 3px 5px !important; }
+            #hud-score { font-size: 12px !important; letter-spacing: 0 !important; }
+            #home-button { top: calc(env(safe-area-inset-top, 0px) + 54px); width: 34px; height: 34px; }
+            .giant-greeting-popup {
+                text-shadow: 0 2px 8px rgba(0,0,0,.65) !important;
+                border-width: 3px !important;
+            }
+        }
+
+        .custom-scroll::-webkit-scrollbar {
+            width: 6px;
+        }
+        .custom-scroll::-webkit-scrollbar-track {
+            background: rgba(15, 23, 42, 0.6);
+            border-radius: 8px;
+        }
+        .custom-scroll::-webkit-scrollbar-thumb {
+            background: #f59e0b;
+            border-radius: 8px;
+        }
+    </style>
+</head>
+<body class="flex flex-col justify-between items-center h-full w-full select-none bg-slate-950">
+
+    <!-- Top HUD Header -->
+    <header class="w-full max-w-md px-3 py-2 z-20 flex justify-between items-center bg-slate-900/95 border-b border-amber-500/20 shadow-md">
+        <div class="flex items-center gap-2">
+            <button id="bgm-toggle-btn" onclick="toggleBGM()" class="bg-indigo-700 hover:bg-indigo-600 text-white text-[11px] font-black px-2.5 py-1 rounded-xl flex items-center gap-1 shadow transition active:scale-95 border border-indigo-500/20">
+                <i id="bgm-icon" class="fa-solid fa-volume-high"></i>
+                <span id="bgm-label">BGM ON</span>
+            </button>
+            <div class="flex flex-col">
+                <div class="flex items-center gap-1">
+                    <span id="hud-combo" class="text-xs sm:text-sm font-black text-amber-300 leading-tight">0 COMBO</span>
+                    <span id="hud-speed" class="text-[10px] font-extrabold text-rose-300 bg-rose-950 px-1.5 py-0.5 rounded-md border border-rose-600/40">SPEED x1.0 ⚡</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Health / Hearts -->
+        <div id="hud-hearts" class="flex gap-1 items-center bg-slate-950 px-2.5 py-1 rounded-full border border-slate-800"></div>
+
+        <!-- Score & Help Button -->
+        <div class="flex items-center gap-2">
+            <div class="text-right">
+                <div class="text-[9px] text-slate-400 font-bold leading-none">리듬 점수</div>
+                <div id="hud-score" class="text-sm sm:text-base font-black text-emerald-400 tracking-wider leading-tight">000000</div>
+            </div>
+            <button onclick="toggleHelpModal(true)" title="가이드" class="bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/40 text-amber-300 px-2 py-1 rounded-xl text-xs font-bold transition flex items-center gap-1 active:scale-95">
+                <i class="fa-solid fa-circle-question text-sm"></i>
+            </button>
+            <button id="home-button" onclick="returnToStartScreen()" title="처음 화면으로" aria-label="처음 화면으로" class="bg-slate-800 hover:bg-slate-700 border border-slate-600 text-white text-sm font-bold transition active:scale-95">
+                <i class="fa-solid fa-house"></i>
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Game Area / 3D Canvas Container -->
+    <main class="relative w-full max-w-md flex-1 overflow-hidden bg-slate-950 flex flex-col justify-center items-center">
+        <div id="webgl-container"></div>
+        <div id="popup-layer" class="absolute inset-0 pointer-events-none z-10"></div>
+        <div id="blackout-overlay" class="hidden absolute inset-0 z-[5] pointer-events-none bg-slate-950/80"></div>
+
+        <!-- Random Events Banner -->
+        <div id="random-event-banner" class="hidden absolute top-3 left-1/2 -translate-x-1/2 z-20 w-[calc(100%-24px)] max-w-xs rounded-2xl border border-amber-300/70 bg-slate-950/95 px-3 py-2 text-center shadow-2xl pointer-events-none backdrop-blur-md">
+            <div id="random-event-title" class="text-sm font-black text-amber-300">돌발 상황!</div>
+            <div id="random-event-description" class="mt-0.5 text-[11px] font-bold text-slate-100">상황 설명</div>
+            <div id="random-event-timer" class="mt-1 text-[10px] text-emerald-300 font-black"></div>
+        </div>
+
+        <!-- Principal Bonus Event Modal -->
+        <div id="overlay-principal" class="hidden absolute inset-0 z-40 bg-slate-950/95 backdrop-blur-md flex flex-col justify-center items-center p-5 text-center">
+            <div class="text-5xl mb-3 animate-bounce">🏫</div>
+            <h2 class="text-2xl sm:text-3xl font-black text-amber-300 mb-2">교장선생님께 인사하기!</h2>
+            <p class="text-sm text-slate-200 mb-1">10초 안에 50번 인사하면 체력 1.5칸 회복!</p>
+            <p class="text-xs text-slate-400 mb-2">현재 체력: <span id="principal-hp" class="font-black text-rose-300">3 / 3 하트</span></p>
+            <p class="text-lg font-black text-amber-300 mb-3">남은 시간: <span id="principal-time">10.0</span>초</p>
+            <div class="w-full max-w-xs rounded-2xl border border-amber-400/50 bg-slate-900 p-4 mb-4 shadow-xl">
+                <div class="text-xs text-slate-400 mb-1">인사 횟수 (목표 50회)</div>
+                <div id="principal-greeting-count" class="text-4xl font-black text-emerald-300 mb-3">0 / 50회</div>
+                <button id="principal-greet-button" type="button" onpointerdown="principalGreet(event)" class="w-full bg-gradient-to-b from-amber-300 to-amber-500 text-slate-950 font-black text-lg py-4 rounded-2xl shadow-lg active:scale-95">🙇‍♂️ 인사하기!</button>
+            </div>
+            <p id="principal-message" class="text-xs text-amber-200 mb-4">빠르게 연타해 봐!</p>
+            <button onclick="finishPrincipalEvent()" class="w-full max-w-xs bg-slate-700 hover:bg-slate-600 text-white font-bold py-3 rounded-xl shadow-md">인사 마치고 게임 계속하기</button>
+        </div>
+
+        <!-- Nurse Shield Event Modal -->
+        <div id="overlay-nurse" class="hidden absolute inset-0 z-40 bg-slate-950/95 backdrop-blur-md flex flex-col justify-center items-center p-5 text-center">
+            <div class="text-5xl mb-3 animate-pulse">🩺</div>
+            <h2 class="text-2xl sm:text-3xl font-black text-emerald-300 mb-2">보건실 선생님 등장!</h2>
+            <p class="text-sm text-slate-200 mb-3">인사 버튼을 10초 동안 꾹 누르고 있으면 실드 획득!</p>
+            <div class="text-lg font-black text-amber-300 mb-3">남은 시간: <span id="nurse-time">10.0</span>초</div>
+            <div class="w-full max-w-xs rounded-2xl border border-emerald-400/50 bg-slate-900 p-4 mb-4 shadow-xl">
+                <div class="h-3 rounded-full bg-slate-700 overflow-hidden mb-4"><div id="nurse-progress" class="h-full bg-emerald-400 transition-all duration-75" style="width:0%"></div></div>
+                <button id="nurse-hold-button" type="button" class="w-full bg-gradient-to-b from-emerald-300 to-emerald-500 text-slate-950 font-black text-lg py-5 rounded-2xl shadow-lg select-none">🙇 인사 버튼 꾹 누르기</button>
+            </div>
+            <p id="nurse-message" class="text-sm text-emerald-200 mb-4">손가락을 떼면 도전 실패!</p>
+            <button onclick="finishNurseEvent()" class="w-full max-w-xs bg-slate-700 text-white font-bold py-3 rounded-xl shadow-md">도전 종료</button>
+        </div>
+
+        <!-- START OVERLAY -->
+        <div id="overlay-start" class="absolute inset-0 z-30 bg-slate-950/90 backdrop-blur-md flex flex-col justify-center items-center p-5 text-center">
+            <div class="w-16 h-16 sm:w-20 sm:h-20 bg-amber-400/20 border-2 border-amber-400 rounded-3xl flex items-center justify-center text-3xl sm:text-4xl mb-3 animate-bounce shadow-xl shadow-amber-500/20">
+                🦭
+            </div>
+            
+            <h1 class="text-2xl sm:text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-amber-300 via-orange-300 to-amber-500 mb-1">
+                예의를 가져가~! 3D
+            </h1>
+            <p class="text-xs text-amber-200/90 font-bold mb-3">🎮 3D 이모지 배지 & 무지개 보노보노 트랙 ⚡</p>
+
+            <div class="w-full max-w-xs mb-3 rounded-2xl border border-indigo-400/40 bg-indigo-950/50 p-3 text-left shadow-lg">
+                <label for="custom-bgm-file" class="block text-xs font-black text-indigo-200 mb-2">🎵 내 노래로 배경음악 바꾸기</label>
+                <input id="custom-bgm-file" type="file" accept="audio/*,.mp3,.m4a,.ogg,.wav" onchange="loadCustomBGM(this)" class="block w-full text-[11px] text-slate-300 file:mr-2 file:rounded-xl file:border-0 file:bg-indigo-400 file:px-2.5 file:py-1.5 file:font-bold file:text-slate-950" />
+                <div id="custom-bgm-status" class="mt-1.5 text-[10px] text-slate-400">음원 파일을 올리면 반복 재생됩니다.</div>
+            </div>
+
+            <button onclick="toggleHelpModal(true)" class="w-full max-w-xs mb-4 bg-slate-800/90 hover:bg-slate-800 border-2 border-amber-400/60 text-amber-300 font-bold py-2.5 px-4 rounded-2xl text-xs sm:text-sm flex items-center justify-center gap-2 shadow-lg transition btn-active-effect">
+                <i class="fa-solid fa-book-open text-amber-400"></i>
+                <span>❓ 리듬 인사 족보 보기</span>
+            </button>
+
+            <!-- Mode/Difficulty Selection -->
+            <div class="w-full max-w-xs mb-4">
+                <div class="text-[11px] text-amber-200/80 mb-1.5 font-bold">기본 시작 스피드</div>
+                <div class="grid grid-cols-3 gap-2">
+                    <button onclick="selectDifficulty('easy')" id="opt-easy" class="diff-btn py-2 rounded-xl text-xs font-bold border-2 border-emerald-500 bg-emerald-500/20 text-emerald-300 shadow">
+                        🌱 EASY
+                    </button>
+                    <button onclick="selectDifficulty('normal')" id="opt-normal" class="diff-btn py-2 rounded-xl text-xs font-bold border-2 border-transparent bg-slate-800 text-slate-400">
+                        🔥 NORMAL
+                    </button>
+                    <button onclick="selectDifficulty('hard')" id="opt-hard" class="diff-btn py-2 rounded-xl text-xs font-bold border-2 border-transparent bg-slate-800 text-slate-400">
+                        🌶️ HARD
+                    </button>
+                </div>
+            </div>
+
+            <!-- Start Button -->
+            <button onclick="startGame()" class="w-full max-w-xs bg-gradient-to-r from-amber-400 via-orange-400 to-amber-500 text-slate-950 font-black py-3.5 rounded-2xl shadow-xl shadow-orange-500/30 text-base transition btn-active-effect">
+                <i class="fa-solid fa-play mr-2"></i>게임 시작하기
+            </button>
+
+            <div class="mt-3.5 text-xs text-slate-400 flex items-center gap-2 bg-slate-900/90 px-3.5 py-1.5 rounded-full border border-slate-800 shadow">
+                <i class="fa-solid fa-trophy text-amber-400"></i>
+                <span>최고 점수: <strong id="start-highscore" class="text-amber-300">0</strong></span>
+            </div>
+        </div>
+
+        <!-- HOW TO PLAY MODAL -->
+        <div id="modal-help" onclick="if(event.target === this) toggleHelpModal(false)" class="hidden absolute inset-0 z-40 bg-slate-950/95 backdrop-blur-md flex justify-center items-center p-2 sm:p-4">
+            <div class="w-full max-w-md bg-slate-900 border-2 border-amber-500/40 rounded-3xl p-3 sm:p-5 shadow-2xl flex flex-col max-h-[94%] min-h-0">
+                <div class="sticky top-0 flex shrink-0 justify-between items-center border-b border-slate-800 pb-2 mb-2 bg-slate-900">
+                    <div class="flex items-center gap-2">
+                        <span class="text-xl">🎵</span>
+                        <h3 class="text-base sm:text-lg font-black text-amber-300">리듬 인사 가이드</h3>
+                    </div>
+                    <button type="button" onclick="toggleHelpModal(false)" aria-label="가이드 닫기" title="닫기" class="shrink-0 w-11 h-11 flex items-center justify-center text-white bg-slate-800 hover:bg-rose-600 active:bg-rose-700 border border-slate-600 rounded-xl text-xl">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                </div>
+
+                <div class="flex-1 min-h-0 overflow-y-auto custom-scroll pr-1 space-y-4 text-xs text-slate-200">
+                    <div class="rounded-2xl border border-emerald-400/30 bg-emerald-950/30 p-3 shadow-inner">
+                        <h4 class="font-black text-emerald-300 mb-1 text-xs sm:text-sm">🎲 3D 피규어 트랙 가이드</h4>
+                        <p class="leading-relaxed text-slate-200">입체 3D 트랙 위에서 어른 캐릭터들이 다가옵니다! 판정 링 위치에 맞춰 아래 버튼 [1/A], [2/S], [3/D]을 눌러 타이밍에 맞는 인사를 전달하세요.</p>
+                    </div>
+                    <div>
+                        <h4 class="font-bold text-amber-400 mb-2 flex items-center gap-1.5 text-xs sm:text-sm">
+                            <i class="fa-solid fa-address-book text-amber-400"></i>
+                            <span>1. 어른별 맞춤 인사 족보</span>
+                        </h4>
+                        <div class="grid grid-cols-1 gap-2">
+                            <div class="bg-rose-950/30 border border-rose-500/30 rounded-2xl p-2.5 flex items-center justify-between">
+                                <div class="flex items-center gap-2">
+                                    <span class="text-xl">🧹🧑‍🍳📋</span>
+                                    <span class="font-bold text-slate-100">청소집사 / 조리사 / 영양사님</span>
+                                </div>
+                                <div class="bg-rose-500/20 border border-rose-400 text-rose-300 font-black px-2 py-1 rounded-xl text-[11px]">
+                                    🙏 감사합니다! [1]
+                                </div>
+                            </div>
+                            <div class="bg-amber-950/30 border border-amber-500/30 rounded-2xl p-2.5 flex items-center justify-between">
+                                <div class="flex items-center gap-2">
+                                    <span class="text-xl">👨‍🏫👩‍👧</span>
+                                    <span class="font-bold text-slate-100">선생님 / 학부모님</span>
+                                </div>
+                                <div class="bg-amber-500/20 border border-amber-400 text-amber-300 font-black px-2 py-1 rounded-xl text-[11px]">
+                                    👋 안녕하세요! [2]
+                                </div>
+                            </div>
+                            <div class="bg-indigo-950/30 border border-indigo-500/30 rounded-2xl p-2.5 flex items-center justify-between">
+                                <div class="flex items-center gap-2">
+                                    <span class="text-xl">🙇‍♂️</span>
+                                    <span class="font-bold text-indigo-200">만능 비밀 카드: 목례!</span>
+                                </div>
+                                <div class="bg-indigo-500/20 border border-indigo-400 text-indigo-300 font-black px-2 py-1 rounded-xl text-[11px]">
+                                    🙇‍♂️ 목례! [3]
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="shrink-0 mt-2 pt-2 border-t border-slate-800 bg-slate-900">
+                    <button type="button" onclick="toggleHelpModal(false)" class="w-full min-h-12 bg-amber-400 hover:bg-amber-300 text-slate-950 font-black py-3 rounded-xl text-sm transition btn-active-effect shadow-md">
+                        확인 / 닫기
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- GAMEOVER OVERLAY -->
+        <div id="overlay-gameover" class="hidden absolute inset-0 z-30 bg-slate-950/95 backdrop-blur-md flex flex-col justify-center items-center p-5 text-center">
+            <div id="res-emoji" class="text-5xl sm:text-6xl mb-2 animate-bounce">🏅</div>
+            <span id="res-badge" class="px-3.5 py-1 bg-amber-400/20 border border-amber-400/50 text-amber-300 text-xs font-bold rounded-full mb-1.5 shadow">
+                리듬 인사 마스터
+            </span>
+            <h2 id="res-title" class="text-2xl font-black text-white mb-1">"3D 예의왕"</h2>
+
+            <div class="w-full max-w-xs bg-slate-900/90 border border-slate-800 rounded-2xl p-3.5 mb-3 space-y-2 text-xs shadow-xl">
+                <div class="flex justify-between items-center">
+                    <span class="text-slate-400">최종 인사 점수</span>
+                    <span id="res-score" class="text-amber-400 font-extrabold text-sm">0</span>
+                </div>
+                <div class="flex justify-between items-center">
+                    <span class="text-slate-400">최대 연속 비트(콤보)</span>
+                    <span id="res-combo" class="text-indigo-400 font-extrabold">0</span>
+                </div>
+                <div class="flex justify-between items-center">
+                    <span class="text-slate-400">도달한 최고 스피드</span>
+                    <span id="res-maxspeed" class="text-rose-400 font-extrabold">SPEED x1.0 ⚡</span>
+                </div>
+            </div>
+
+            <div class="flex gap-2 w-full max-w-xs">
+                <button onclick="returnToStartScreen()" class="flex-1 bg-slate-700 hover:bg-slate-600 text-white font-black py-3.5 rounded-2xl text-sm transition btn-active-effect shadow-md">
+                    <i class="fa-solid fa-house mr-1"></i> 처음 화면
+                </button>
+                <button onclick="startGame()" class="flex-1 bg-gradient-to-r from-emerald-400 to-teal-500 text-slate-950 font-black py-3.5 rounded-2xl shadow-xl text-sm transition btn-active-effect">
+                    <i class="fa-solid fa-rotate-right mr-1"></i> 다시 도전하기
+                </button>
+            </div>
+        </div>
+    </main>
+
+    <!-- Bottom Action Controls -->
+    <footer class="w-full max-w-md p-2.5 sm:p-3 bg-slate-900/95 backdrop-blur-md border-t border-amber-500/40 z-20 shadow-2xl">
+        <div class="grid grid-cols-3 gap-2">
+            <button id="btn-greet-thanks" onpointerdown="triggerGreeting('thanks', event)" class="btn-active-effect bg-gradient-to-b from-rose-500 to-rose-700 border-b-4 border-rose-950 text-white rounded-2xl p-2.5 sm:p-3 flex flex-col items-center justify-center shadow-xl active:brightness-125">
+                <span class="text-2xl sm:text-3xl mb-0.5">🙏</span>
+                <span class="text-xs sm:text-sm font-black tracking-tight">감사합니다!</span>
+                <span class="text-[9px] text-rose-200/80 font-bold mt-0.5">[1] / [A]</span>
+            </button>
+
+            <button id="btn-greet-hello" onpointerdown="triggerGreeting('hello', event)" class="btn-active-effect bg-gradient-to-b from-amber-500 to-amber-700 border-b-4 border-amber-950 text-white rounded-2xl p-2.5 sm:p-3 flex flex-col items-center justify-center shadow-xl active:brightness-125">
+                <span class="text-2xl sm:text-3xl mb-0.5">👋</span>
+                <span class="text-xs sm:text-sm font-black tracking-tight">안녕하세요!</span>
+                <span class="text-[9px] text-amber-200/80 font-bold mt-0.5">[2] / [S]</span>
+            </button>
+
+            <button id="btn-greet-nod" onpointerdown="triggerGreeting('nod', event)" class="btn-active-effect bg-gradient-to-b from-indigo-500 to-indigo-700 border-b-4 border-indigo-950 text-white rounded-2xl p-2.5 sm:p-3 flex flex-col items-center justify-center shadow-xl active:brightness-125">
+                <span class="text-2xl sm:text-3xl mb-0.5">🙇‍♂️</span>
+                <span class="text-xs sm:text-sm font-black tracking-tight">목례!</span>
+                <span class="text-[9px] text-indigo-200/80 font-bold mt-0.5">[3] / [D]</span>
+            </button>
+        </div>
+    </footer>
+
+    <script>
+        // --- AUDIO ENGINE ---
+        let audioCtx = null;
+        let isMuted = false;
+        let bgmTimer = null;
+        let customBGM = null;
+        let customBGMUrl = null;
+
+        const BGM_MELODY = [
+            { note: 523.25, duration: 0.13 }, { note: 659.25, duration: 0.13 }, { note: 783.99, duration: 0.13 }, { note: 659.25, duration: 0.13 },
+            { note: 587.33, duration: 0.13 }, { note: 698.46, duration: 0.13 }, { note: 880.00, duration: 0.13 }, { note: 698.46, duration: 0.13 },
+            { note: 523.25, duration: 0.13 }, { note: 659.25, duration: 0.13 }, { note: 783.99, duration: 0.13 }, { note: 1046.50, duration: 0.13 },
+            { note: 987.77, duration: 0.13 }, { note: 783.99, duration: 0.13 }, { note: 659.25, duration: 0.13 }, { note: 783.99, duration: 0.13 }
+        ];
+        let bgmStep = 0;
+
+        function loadCustomBGM(input) {
+            const file = input && input.files && input.files[0];
+            if (!file) return;
+            if (customBGM) {
+                customBGM.pause();
+                customBGM.src = '';
+                customBGM = null;
+            }
+            if (customBGMUrl) URL.revokeObjectURL(customBGMUrl);
+            customBGMUrl = URL.createObjectURL(file);
+            customBGM = new Audio(customBGMUrl);
+            customBGM.loop = true;
+            customBGM.preload = 'auto';
+            customBGM.volume = 0.65;
+            customBGM.muted = isMuted;
+            const status = document.getElementById('custom-bgm-status');
+            if (status) status.innerText = '선택됨: ' + file.name;
+        }
+
+        function initAudio() {
+            if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+        }
+
+        function toggleBGM() {
+            initAudio();
+            isMuted = !isMuted;
+            if (customBGM) customBGM.muted = isMuted;
+            const btn = document.getElementById('bgm-toggle-btn');
+            const icon = document.getElementById('bgm-icon');
+            const label = document.getElementById('bgm-label');
+
+            if (isMuted) {
+                icon.className = "fa-solid fa-volume-xmark";
+                label.innerText = "BGM OFF";
+                btn.className = "bg-slate-700 text-slate-300 text-[11px] font-black px-2.5 py-1 rounded-xl flex items-center gap-1 shadow transition active:scale-95";
+            } else {
+                icon.className = "fa-solid fa-volume-high";
+                label.innerText = "BGM ON";
+                btn.className = "bg-indigo-600/90 hover:bg-indigo-500 text-white text-[11px] font-black px-2.5 py-1 rounded-xl flex items-center gap-1 shadow transition active:scale-95 border border-indigo-400/30";
+            }
+        }
+
+        function startBGMSequencer(preservePosition = false) {
+            if (bgmTimer) clearInterval(bgmTimer);
+            bgmTimer = null;
+            if (!preservePosition) bgmStep = 0;
+            if (customBGM) {
+                customBGM.muted = isMuted;
+                if (!preservePosition) { try { customBGM.currentTime = 0; } catch (e) {} }
+                customBGM.play().catch(() => {});
+                return;
+            }
+            bgmTimer = setInterval(() => {
+                if (!isPlaying || isMuted || !audioCtx) return;
+                const now = audioCtx.currentTime;
+                const item = BGM_MELODY[bgmStep % BGM_MELODY.length];
+
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = 'square';
+                osc.frequency.setValueAtTime(item.note, now);
+                gain.gain.setValueAtTime(0.04, now);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + item.duration);
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.start(now);
+                osc.stop(now + item.duration);
+
+                bgmStep++;
+            }, 150);
+        }
+
+        function stopBGMSequencer() {
+            if (bgmTimer) clearInterval(bgmTimer);
+            bgmTimer = null;
+            if (customBGM) {
+                customBGM.pause();
+                try { customBGM.currentTime = 0; } catch (e) {}
+            }
+        }
+
+        function playSound(type) {
+            if (!audioCtx || isMuted) return;
+            try {
+                const now = audioCtx.currentTime;
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+
+                if (type === 'good') {
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(440, now);
+                    osc.frequency.setValueAtTime(554.37, now + 0.08);
+                    gain.gain.setValueAtTime(0.2, now);
+                    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.2);
+                    osc.start(now);
+                    osc.stop(now + 0.2);
+                } else if (type === 'miss') {
+                    osc.type = 'sawtooth';
+                    osc.frequency.setValueAtTime(160, now);
+                    osc.frequency.linearRampToValueAtTime(80, now + 0.22);
+                    gain.gain.setValueAtTime(0.22, now);
+                    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.22);
+                    osc.start(now);
+                    osc.stop(now + 0.22);
+                } else if (type === 'event' || type === 'shield') {
+                    osc.type = 'triangle';
+                    osc.frequency.setValueAtTime(587.33, now);
+                    osc.frequency.setValueAtTime(880, now + 0.08);
+                    gain.gain.setValueAtTime(0.2, now);
+                    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.25);
+                    osc.start(now);
+                    osc.stop(now + 0.25);
+                }
+            } catch(e) {}
+        }
+
+        function triggerHaptic(pattern) {
+            if (navigator.vibrate) {
+                try { navigator.vibrate(pattern); } catch(e){}
+            }
+        }
+
+        function toggleHelpModal(show) {
+            const modal = document.getElementById('modal-help');
+            if (!modal) return;
+            if (show) modal.classList.remove('hidden');
+            else modal.classList.add('hidden');
+        }
+
+        // --- GAME CONFIG & DATA ---
+        const ADULT_TYPES = [
+            { id: 'cleaner', title: '청소집사님', emoji: '🧹', color: 0x38bdf8, bestGreeting: 'thanks', greetingText: '청소집사님께 감사합니다! 🙏' },
+            { id: 'cook', title: '조리사님', emoji: '🧑‍🍳', color: 0xf97316, bestGreeting: 'thanks', greetingText: '조리사님께 감사합니다! 🙏' },
+            { id: 'teacher', title: '선생님', emoji: '👨‍🏫', color: 0xa855f7, bestGreeting: 'hello', greetingText: '선생님께 안녕하세요! 👋' },
+            { id: 'nutritionist', title: '영양사님', emoji: '📋', color: 0x10b981, bestGreeting: 'thanks', greetingText: '영양사님께 감사합니다! 🙏' },
+            { id: 'parent', title: '학부모님', emoji: '👩‍👧', color: 0xec4899, bestGreeting: 'hello', greetingText: '학부모님께 안녕하세요! 👋' }
+        ];
+
+        const DIFFICULTIES = {
+            easy: { name: 'EASY', baseSpeed: 0.18, spawnInterval: 1100 },
+            normal: { name: 'NORMAL', baseSpeed: 0.24, spawnInterval: 880 },
+            hard: { name: 'HARD', baseSpeed: 0.32, spawnInterval: 620 }
+        };
+
+        const TRACK_START_Z = -35;
+        const TRACK_HIT_Z = 3.5;
+        const TRACK_END_Z = 8.0;
+        const LANE_X_POSITIONS = [-2.2, 0, 2.2];
+
+        // Smooth curve formula for the track
+        function getTrackCurveOffset(z) {
+            const progress = (z - TRACK_HIT_Z) / (TRACK_START_Z - TRACK_HIT_Z);
+            return Math.sin(progress * Math.PI * 0.7) * 2.5;
+        }
+
+        function getTrackCurveAngle(z) {
+            const deltaZ = 0.5;
+            const x1 = getTrackCurveOffset(z - deltaZ);
+            const x2 = getTrackCurveOffset(z + deltaZ);
+            return Math.atan2(x1 - x2, deltaZ * 2);
+        }
+
+        // --- GAME STATE ---
+        let selectedDiffKey = 'easy';
+        let isPlaying = false;
+        let score = 0;
+        let combo = 0;
+        let maxCombo = 0;
+        let hp = 6;
+        let shields = 0;
+        let maxSpeedMultiplier = 1.0;
+        let lastSpawnTime = 0;
+
+        let principalGreetingCount = 0;
+        let principalEventActive = false;
+        let principalDeadline = 0;
+        let principalTimerId = null;
+        let principalChallengeFinished = false;
+
+        let nurseEventActive = false;
+        let nurseHoldStartedAt = 0;
+        let nurseHoldInterval = null;
+        let nurseHolding = false;
+        let nurseChallengeFinished = false;
+
+        // --- THREE.JS GLOBALS ---
+        let scene, camera, renderer;
+        let hitZoneMesh, hitZoneLight;
+        let adultMeshes = [];
+        let mascotMesh;
+        let ambientLight, dirLight;
+        const faceTextureCache = {};
+
+        window.onload = function() {
+            init3DScene();
+            
+            const savedScore = localStorage.getItem('school_rhythm_highscore') || '0';
+            document.getElementById('start-highscore').innerText = Number(savedScore).toLocaleString();
+
+            window.addEventListener('resize', onWindowResize);
+            window.addEventListener('keydown', (e) => {
+                if (!isPlaying) return;
+                const key = e.key.toUpperCase();
+                if (key === '1' || key === 'A') triggerGreeting('thanks');
+                else if (key === '2' || key === 'S') triggerGreeting('hello');
+                else if (key === '3' || key === 'D') triggerGreeting('nod');
+            });
+
+            updateHUD();
+            animateLoop();
+        };
+
+        function selectDifficulty(diff) {
+            selectedDiffKey = diff;
+            document.querySelectorAll('.diff-btn').forEach(btn => {
+                btn.className = "diff-btn py-2 rounded-xl text-xs font-bold border-2 border-transparent bg-slate-800 text-slate-400";
+            });
+            const selectedBtn = document.getElementById(`opt-${diff}`);
+            if (diff === 'easy') {
+                selectedBtn.className = "diff-btn py-2 rounded-xl text-xs font-bold border-2 border-emerald-500 bg-emerald-500/20 text-emerald-300 shadow";
+            } else if (diff === 'normal') {
+                selectedBtn.className = "diff-btn py-2 rounded-xl text-xs font-bold border-2 border-amber-500 bg-amber-500/20 text-amber-300 shadow";
+            } else {
+                selectedBtn.className = "diff-btn py-2 rounded-xl text-xs font-bold border-2 border-rose-500 bg-rose-500/20 text-rose-300 shadow";
+            }
+        }
+
+        function returnToStartScreen() {
+            isPlaying = false;
+            stopBGMSequencer();
+
+            adultMeshes.forEach(adult => scene.remove(adult.group));
+            adultMeshes = [];
+
+            if (principalTimerId) {
+                clearInterval(principalTimerId);
+                principalTimerId = null;
+            }
+            principalEventActive = false;
+            principalChallengeFinished = false;
+
+            document.getElementById('blackout-overlay').classList.add('hidden');
+            document.getElementById('overlay-principal').classList.add('hidden');
+            document.getElementById('overlay-nurse').classList.add('hidden');
+            document.getElementById('overlay-gameover').classList.add('hidden');
+            document.getElementById('overlay-start').classList.remove('hidden');
+
+            const savedScore = localStorage.getItem('school_rhythm_highscore') || '0';
+            document.getElementById('start-highscore').innerText = Number(savedScore).toLocaleString();
+        }
+
+        function startGame() {
+            initAudio();
+            document.getElementById('overlay-start').classList.add('hidden');
+            document.getElementById('overlay-gameover').classList.add('hidden');
+
+            score = 0;
+            combo = 0;
+            maxCombo = 0;
+            hp = 6;
+            shields = 0;
+            maxSpeedMultiplier = 1.0;
+
+            adultMeshes.forEach(adult => scene.remove(adult.group));
+            adultMeshes = [];
+
+            principalGreetingCount = 0;
+            principalEventActive = false;
+            principalChallengeFinished = false;
+            if (principalTimerId) clearInterval(principalTimerId);
+            principalTimerId = null;
+
+            document.getElementById('overlay-principal').classList.add('hidden');
+            document.getElementById('overlay-nurse').classList.add('hidden');
+
+            lastSpawnTime = performance.now();
+            isPlaying = true;
+
+            updateHUD();
+            startBGMSequencer();
+        }
+
+        function getCurrentSpeedMultiplier() {
+            let mult = 1.0;
+            if (combo >= 25) mult = 4.2;
+            else if (combo >= 18) mult = 3.2;
+            else if (combo >= 12) mult = 2.4;
+            else if (combo >= 6) mult = 1.7;
+            else if (combo >= 3) mult = 1.3;
+
+            if (mult > maxSpeedMultiplier) maxSpeedMultiplier = mult;
+            return mult;
+        }
+
+        function updateHUD() {
+            document.getElementById('hud-score').innerText = score.toString().padStart(6, '0');
+            document.getElementById('hud-combo').innerText = `${combo} COMBO`;
+
+            const currentMult = getCurrentSpeedMultiplier();
+            document.getElementById('hud-speed').innerText = `SPEED x${currentMult.toFixed(1)} ⚡`;
+
+            const heartsContainer = document.getElementById('hud-hearts');
+            heartsContainer.innerHTML = '';
+            for (let i = 0; i < 3; i++) {
+                const heartValue = hp - (i * 2);
+                if (heartValue >= 2) {
+                    heartsContainer.innerHTML += `<i class="fa-solid fa-heart text-rose-500 text-sm sm:text-base"></i>`;
+                } else if (heartValue === 1) {
+                    heartsContainer.innerHTML += `<i class="fa-solid fa-heart-crack text-rose-400 text-sm sm:text-base animate-pulse"></i>`;
+                } else {
+                    heartsContainer.innerHTML += `<i class="fa-regular fa-heart text-slate-700 text-sm sm:text-base"></i>`;
+                }
+            }
+            const shieldBadge = document.createElement('span');
+            shieldBadge.id = 'hud-shields';
+            shieldBadge.className = 'ml-1 text-xs font-black text-cyan-300 whitespace-nowrap';
+            shieldBadge.textContent = `🛡 ${shields}/2`;
+            heartsContainer.appendChild(shieldBadge);
+        }
+
+        function greetingForLane(laneIndex) {
+            return ['thanks', 'hello', 'nod'][laneIndex];
+        }
+
+        function onWindowResize() {
+            const container = document.getElementById('webgl-container');
+            if (!container || !camera || !renderer) return;
+            camera.aspect = container.clientWidth / container.clientHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(container.clientWidth, container.clientHeight);
+        }
+
+        function init3DScene() {
+            const container = document.getElementById('webgl-container');
+            
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x13182b);
+            scene.fog = new THREE.FogExp2(0x13182b, 0.018);
+
+            camera = new THREE.PerspectiveCamera(55, container.clientWidth / container.clientHeight, 0.1, 100);
+            camera.position.set(0, 5.0, 9.2);
+            camera.lookAt(0, 0.8, -10);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(container.clientWidth, container.clientHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            renderer.shadowMap.enabled = true;
+            container.appendChild(renderer.domElement);
+
+            ambientLight = new THREE.AmbientLight(0xffffff, 1.2);
+            scene.add(ambientLight);
+
+            dirLight = new THREE.DirectionalLight(0xffffff, 1.0);
+            dirLight.position.set(6, 14, 6);
+            scene.add(dirLight);
+
+            hitZoneLight = new THREE.PointLight(0xf59e0b, 3.0, 20);
+            hitZoneLight.position.set(0, 1.8, TRACK_HIT_Z);
+            scene.add(hitZoneLight);
+
+            // Generate clean single track mesh using dynamic ribbon geometry (No Z-fighting or distortion)
+            const steps = 60;
+            const trackWidth = 7.5;
+            const geo = new THREE.BufferGeometry();
+            const vertices = [];
+            const uvs = [];
+
+            for (let i = 0; i <= steps; i++) {
+                const t = i / steps;
+                const z = TRACK_START_Z + t * (TRACK_END_Z - TRACK_START_Z);
+                const x = getTrackCurveOffset(z);
+                const angle = getTrackCurveAngle(z);
+
+                const cosA = Math.cos(angle);
+                const sinA = Math.sin(angle);
+
+                // Left & Right edge coordinates for ribbon
+                const lx = x - (trackWidth / 2) * cosA;
+                const rx = x + (trackWidth / 2) * cosA;
+                const lz = z + (trackWidth / 2) * sinA;
+                const rz = z - (trackWidth / 2) * sinA;
+
+                vertices.push(lx, 0, lz);
+                vertices.push(rx, 0, rz);
+
+                uvs.push(0, t * 15);
+                uvs.push(1, t * 15);
+            }
+
+            const indices = [];
+            for (let i = 0; i < steps; i++) {
+                const a = i * 2;
+                const b = a + 1;
+                const c = a + 2;
+                const d = a + 3;
+                indices.push(a, b, c);
+                indices.push(b, d, c);
+            }
+
+            geo.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+            geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+            geo.setIndex(indices);
+            geo.computeVertexNormals();
+
+            // High-Resolution 2048x2048 Track Canvas Texture for Crystal Clear Quality
+            const canvas = document.createElement('canvas');
+            canvas.width = 2048;
+            canvas.height = 2048;
+            const ctx = canvas.getContext('2d');
+            
+            // Rainbow background stripes
+            const rainbowColors = ['#ff4757', '#ffa502', '#eccc68', '#2ed573', '#1e90ff', '#3742fa', '#a855f7'];
+            const stripeW = 2048 / rainbowColors.length;
+            rainbowColors.forEach((color, idx) => {
+                ctx.fillStyle = color;
+                ctx.fillRect(idx * stripeW, 0, stripeW, 2048);
+            });
+
+            // Bright crisp white lane dividers
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(660, 0, 32, 2048);
+            ctx.fillRect(1356, 0, 32, 2048);
+
+            const trackTexture = new THREE.CanvasTexture(canvas);
+            trackTexture.wrapS = THREE.ClampToEdgeWrapping;
+            trackTexture.wrapT = THREE.RepeatWrapping;
+            trackTexture.minFilter = THREE.LinearMipmapLinearFilter;
+            trackTexture.magFilter = THREE.LinearFilter;
+            trackTexture.generateMipmaps = true;
+
+            const maxAnisotropy = renderer.capabilities.getMaxAnisotropy();
+            if (maxAnisotropy > 0) {
+                trackTexture.anisotropy = maxAnisotropy;
+            }
+
+            const trackMat = new THREE.MeshBasicMaterial({ map: trackTexture, side: THREE.DoubleSide });
+            const trackMesh = new THREE.Mesh(geo, trackMat);
+            scene.add(trackMesh);
+
+            // Hit Zone Target Bar
+            const targetGeo = new THREE.BoxGeometry(7.2, 0.12, 0.4);
+            const targetMat = new THREE.MeshBasicMaterial({ color: 0xfcb316 });
+            const hitZoneOffset = getTrackCurveOffset(TRACK_HIT_Z);
+            const hitZoneAngle = getTrackCurveAngle(TRACK_HIT_Z);
+            
+            hitZoneMesh = new THREE.Mesh(targetGeo, targetMat);
+            hitZoneMesh.position.set(hitZoneOffset, 0.08, TRACK_HIT_Z);
+            hitZoneMesh.rotation.y = hitZoneAngle;
+            scene.add(hitZoneMesh);
+
+            // Target Rings on Hit Zone
+            LANE_X_POSITIONS.forEach(laneX => {
+                const ringGeo = new THREE.TorusGeometry(0.65, 0.08, 16, 32);
+                const ringMat = new THREE.MeshBasicMaterial({ color: 0xffd700 });
+                const ring = new THREE.Mesh(ringGeo, ringMat);
+                ring.rotation.x = Math.PI / 2;
+                ring.rotation.z = hitZoneAngle;
+                
+                const ringX = hitZoneOffset + laneX * Math.cos(hitZoneAngle);
+                ring.position.set(ringX, 0.12, TRACK_HIT_Z);
+                scene.add(ring);
+            });
+
+            // Animated Bonobono Mascot
+            const sealGroup = new THREE.Group();
+            
+            const sealGeo = new THREE.SphereGeometry(1.25, 32, 24);
+            const sealMat = new THREE.MeshBasicMaterial({ color: 0x38bdf8 });
+            mascotMesh = new THREE.Mesh(sealGeo, sealMat);
+            sealGroup.add(mascotMesh);
+
+            const muzzleGeo = new THREE.SphereGeometry(0.42, 20, 16);
+            const muzzleMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+            const muzzleLeft = new THREE.Mesh(muzzleGeo, muzzleMat);
+            muzzleLeft.scale.set(1.1, 0.85, 0.6);
+            muzzleLeft.position.set(-0.25, -0.22, 1.02);
+            mascotMesh.add(muzzleLeft);
+
+            const muzzleRight = new THREE.Mesh(muzzleGeo, muzzleMat);
+            muzzleRight.scale.set(1.1, 0.85, 0.6);
+            muzzleRight.position.set(0.25, -0.22, 1.02);
+            mascotMesh.add(muzzleRight);
+
+            const noseGeo = new THREE.SphereGeometry(0.18, 16, 16);
+            const noseMat = new THREE.MeshBasicMaterial({ color: 0x0f172a });
+            const nose = new THREE.Mesh(noseGeo, noseMat);
+            nose.position.set(0, -0.12, 1.22);
+            mascotMesh.add(nose);
+
+            const eyeGeo = new THREE.SphereGeometry(0.1, 16, 16);
+            const eyeMat = new THREE.MeshBasicMaterial({ color: 0x0f172a });
+            
+            const eyeLeft = new THREE.Mesh(eyeGeo, eyeMat);
+            eyeLeft.position.set(-0.68, 0.12, 0.95);
+            mascotMesh.add(eyeLeft);
+
+            const eyeRight = new THREE.Mesh(eyeGeo, eyeMat);
+            eyeRight.position.set(0.68, 0.12, 0.95);
+            mascotMesh.add(eyeRight);
+
+            const shellGeo = new THREE.SphereGeometry(0.35, 16, 16);
+            const shellMat = new THREE.MeshBasicMaterial({ color: 0xf43f5e });
+            const shell = new THREE.Mesh(shellGeo, shellMat);
+            shell.scale.set(1.2, 0.8, 0.5);
+            shell.position.set(0.7, -0.7, 0.9);
+            shell.rotation.z = -0.3;
+            mascotMesh.add(shell);
+
+            sealGroup.position.set(-5.5, 1.3, -8);
+            scene.add(sealGroup);
+        }
+
+        function getEmojiTexture(emoji, title) {
+            const key = emoji + '_' + title;
+            if (faceTextureCache[key]) return faceTextureCache[key];
+
+            const canvas = document.createElement('canvas');
+            canvas.width = 256;
+            canvas.height = 256;
+            const ctx = canvas.getContext('2d');
+
+            ctx.clearRect(0, 0, 256, 256);
+
+            ctx.fillStyle = '#ffffff';
+            ctx.beginPath();
+            ctx.arc(128, 128, 118, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.font = '120px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(emoji, 128, 118);
+
+            ctx.fillStyle = '#0f172a';
+            ctx.font = 'bold 28px Pretendard, sans-serif';
+            ctx.fillText(title, 128, 205);
+
+            const texture = new THREE.CanvasTexture(canvas);
+            faceTextureCache[key] = texture;
+            return texture;
+        }
+
+        // 3D Emblem with NO glare / light reflections (Flat Matte MeshBasicMaterial)
+        function create3DEmblemBadge(type) {
+            const group = new THREE.Group();
+
+            const badgeGeo = new THREE.CylinderGeometry(0.85, 0.85, 0.22, 32);
+            const badgeMat = new THREE.MeshBasicMaterial({
+                color: type.color
+            });
+            const badgeMesh = new THREE.Mesh(badgeGeo, badgeMat);
+            badgeMesh.rotation.x = Math.PI / 2;
+            group.add(badgeMesh);
+
+            const texture = getEmojiTexture(type.emoji, type.title);
+            const faceGeo = new THREE.CircleGeometry(0.78, 32);
+            const faceMat = new THREE.MeshBasicMaterial({
+                map: texture,
+                transparent: true
+            });
+            const faceFront = new THREE.Mesh(faceGeo, faceMat);
+            faceFront.position.z = 0.12;
+            group.add(faceFront);
+
+            const ringGeo = new THREE.TorusGeometry(0.88, 0.05, 16, 32);
+            const ringMat = new THREE.MeshBasicMaterial({
+                color: 0xffffff
+            });
+            const outerRing = new THREE.Mesh(ringGeo, ringMat);
+            group.add(outerRing);
+
+            return group;
+        }
+
+        function spawnAdult() {
+            const config = DIFFICULTIES[selectedDiffKey];
+            const lane = Math.floor(Math.random() * 3);
+            const isPrincipal = Math.random() < 0.055;
+            const isNurse = !isPrincipal && Math.random() < 0.058;
+            let type;
+
+            if (isPrincipal) {
+                type = {
+                    id: 'principal', title: '교장선생님', emoji: '👨‍💼', color: 0xfacc15,
+                    bestGreeting: greetingForLane(lane), greetingText: '교장선생님께 인사! 🙇‍♂️', isPrincipal: true
+                };
+            } else if (isNurse) {
+                type = {
+                    id: 'nurse', title: '보건실 선생님', emoji: '🩺', color: 0x34d399,
+                    bestGreeting: greetingForLane(lane), greetingText: '보건실 선생님께 인사!', isNurse: true
+                };
+            } else if (lane === 0) {
+                const choices = ADULT_TYPES.filter(p => p.bestGreeting === 'thanks');
+                type = choices[Math.floor(Math.random() * choices.length)];
+            } else if (lane === 1) {
+                const choices = ADULT_TYPES.filter(p => p.bestGreeting === 'hello');
+                type = choices[Math.floor(Math.random() * choices.length)];
+            } else {
+                const person = ADULT_TYPES[Math.floor(Math.random() * ADULT_TYPES.length)];
+                type = { ...person, bestGreeting: 'nod', emoji: '🙇‍♂️' };
+            }
+
+            const emblemGroup = create3DEmblemBadge(type);
+            emblemGroup.position.set(LANE_X_POSITIONS[lane], 1.2, TRACK_START_Z);
+            scene.add(emblemGroup);
+
+            adultMeshes.push({
+                group: emblemGroup,
+                lane: lane,
+                z: TRACK_START_Z,
+                baseSpeed: config.baseSpeed,
+                greeted: false,
+                data: type,
+                x: LANE_X_POSITIONS[lane]
+            });
+        }
+
+        function triggerGreeting(greetingType, event) {
+            if (event && event.preventDefault) event.preventDefault();
+            if (!isPlaying) return;
+
+            initAudio();
+
+            let targetAdult = null;
+            let minDistance = 9999;
+            const expectedLane = greetingType === 'thanks' ? 0 : (greetingType === 'hello' ? 1 : 2);
+
+            for (let i = 0; i < adultMeshes.length; i++) {
+                const adult = adultMeshes[i];
+                if (adult.greeted || adult.lane !== expectedLane) continue;
+                const dist = Math.abs(adult.z - TRACK_HIT_Z);
+                if (dist < minDistance) {
+                    minDistance = dist;
+                    targetAdult = adult;
+                }
+            }
+
+            const hitThreshold = 3.2;
+
+            if (targetAdult && minDistance <= hitThreshold) {
+                targetAdult.greeted = true;
+                scene.remove(targetAdult.group);
+
+                const isBestGreeting = (greetingType === targetAdult.data.bestGreeting);
+                const isNod = (greetingType === 'nod');
+
+                if (isBestGreeting || isNod) {
+                    combo++;
+                    if (combo > maxCombo) maxCombo = combo;
+
+                    let addedScore = 1000;
+                    let displayMsg = targetAdult.data.greetingText;
+                    if (isNod) {
+                        displayMsg = `${targetAdult.data.title}께 목례! 🙇‍♂️`;
+                        addedScore = 600;
+                    }
+
+                    const rawPoints = addedScore + (combo * 50);
+                    score += isBestGreeting ? Math.round(rawPoints * 1.5) : rawPoints;
+
+                    if (targetAdult.data.isPrincipal) {
+                        showGiantGreetingPopup('교장선생님께 인사하기!', '#facc15');
+                        playSound('event');
+                        triggerHaptic([35, 20, 35]);
+                        openPrincipalEvent();
+                    } else if (targetAdult.data.isNurse) {
+                        showGiantGreetingPopup('보건실 선생님 등장!', '#34d399');
+                        playSound('event');
+                        triggerHaptic([35, 20, 35]);
+                        openNurseEvent();
+                    } else {
+                        showGiantGreetingPopup(displayMsg, `#${targetAdult.data.color.toString(16)}`);
+                        playSound('good');
+                        triggerHaptic([35, 20, 35]);
+                    }
+                } else {
+                    combo = 0;
+                    deductHalfHeart();
+                    showJudgement("인사 미스! 💔", "text-rose-400 border-rose-500");
+                    playSound('miss');
+                    triggerHaptic([80]);
+                }
+            } else {
+                combo = 0;
+                deductHalfHeart();
+                showJudgement("MISS! 💔", "text-rose-400 border-rose-500");
+                playSound('miss');
+                triggerHaptic([80]);
+            }
+
+            updateHUD();
+        }
+
+        function openPrincipalEvent() {
+            if (principalTimerId) clearInterval(principalTimerId);
+            principalGreetingCount = 0;
+            principalEventActive = true;
+            principalChallengeFinished = false;
+            isPlaying = false;
+            stopBGMSequencer();
+
+            document.getElementById('principal-greeting-count').innerText = '0 / 50회';
+            document.getElementById('principal-time').innerText = '10.0';
+            document.getElementById('principal-message').innerText = '빠르게 연타해 봐!';
+            
+            const greetButton = document.getElementById('principal-greet-button');
+            greetButton.disabled = false;
+            greetButton.classList.remove('opacity-50');
+            
+            principalDeadline = performance.now() + 10000;
+            document.getElementById('overlay-principal').classList.remove('hidden');
+            
+            document.getElementById('principal-hp').innerText = `${(hp / 2).toFixed(1).replace('.0', '')} / 3 하트`;
+
+            principalTimerId = setInterval(() => {
+                if (!principalEventActive || principalChallengeFinished) return;
+                const remaining = Math.max(0, (principalDeadline - performance.now()) / 1000);
+                document.getElementById('principal-time').innerText = remaining.toFixed(1);
+                if (remaining <= 0) {
+                    principalChallengeFinished = true;
+                    clearInterval(principalTimerId);
+                    principalTimerId = null;
+                    greetButton.disabled = true;
+                    greetButton.classList.add('opacity-50');
+                    document.getElementById('principal-message').innerText = '시간 종료!';
+                }
+            }, 50);
+        }
+
+        function principalGreet(event) {
+            if (event && event.preventDefault) event.preventDefault();
+            if (!principalEventActive || principalChallengeFinished) return;
+            
+            principalGreetingCount++;
+            document.getElementById('principal-greeting-count').innerText = `${principalGreetingCount} / 50회`;
+
+            if (principalGreetingCount >= 50) {
+                principalChallengeFinished = true;
+                if (principalTimerId) clearInterval(principalTimerId);
+                principalTimerId = null;
+
+                hp = Math.min(6, hp + 3);
+                document.getElementById('principal-message').innerText = '성공! 체력 1.5칸 회복!';
+                document.getElementById('principal-greet-button').disabled = true;
+                updateHUD();
+                playSound('good');
+                triggerHaptic([35, 20, 35]);
+            }
+        }
+
+        function finishPrincipalEvent() {
+            if (!principalEventActive) return;
+            principalEventActive = false;
+            if (principalTimerId) clearInterval(principalTimerId);
+            principalTimerId = null;
+
+            document.getElementById('overlay-principal').classList.add('hidden');
+            isPlaying = true;
+            lastSpawnTime = performance.now();
+            updateHUD();
+            startBGMSequencer(true);
+        }
+
+        function openNurseEvent() {
+            nurseEventActive = true;
+            nurseChallengeFinished = false;
+            nurseHolding = false;
+            nurseHoldStartedAt = 0;
+            isPlaying = false;
+            stopBGMSequencer();
+
+            document.getElementById('nurse-time').innerText = '10.0';
+            document.getElementById('nurse-progress').style.width = '0%';
+            document.getElementById('nurse-message').innerText = '손가락을 떼면 도전 실패!';
+            document.getElementById('nurse-hold-button').disabled = false;
+            document.getElementById('overlay-nurse').classList.remove('hidden');
+
+            if (nurseHoldInterval) clearInterval(nurseHoldInterval);
+            nurseHoldInterval = setInterval(() => {
+                if (!nurseEventActive || nurseChallengeFinished || !nurseHolding) return;
+                const elapsed = performance.now() - nurseHoldStartedAt;
+                const progress = Math.min(100, elapsed / 10000 * 100);
+                document.getElementById('nurse-progress').style.width = progress + '%';
+                document.getElementById('nurse-time').innerText = Math.max(0, (10 - elapsed / 1000)).toFixed(1);
+
+                if (elapsed >= 10000) {
+                    nurseChallengeFinished = true;
+                    nurseHolding = false;
+                    shields = Math.min(2, shields + 2);
+                    document.getElementById('nurse-progress').style.width = '100%';
+                    document.getElementById('nurse-time').innerText = '0.0';
+                    document.getElementById('nurse-message').innerText = '성공! 실드 2개 획득!';
+                    document.getElementById('nurse-hold-button').disabled = true;
+                    updateHUD();
+                    playSound('shield');
+                    triggerHaptic([35, 20, 35]);
+                }
+            }, 40);
+        }
+
+        function finishNurseEvent() {
+            nurseHolding = false;
+            nurseEventActive = false;
+            if (nurseHoldInterval) clearInterval(nurseHoldInterval);
+            nurseHoldInterval = null;
+
+            document.getElementById('overlay-nurse').classList.add('hidden');
+            isPlaying = true;
+            lastSpawnTime = performance.now();
+            updateHUD();
+            startBGMSequencer(true);
+        }
+
+        function deductHalfHeart() {
+            if (shields > 0) {
+                shields--;
+                updateHUD();
+                showJudgement("실드 발동! 🛡", "text-cyan-300 border-cyan-400");
+                return;
+            }
+            hp -= 1;
+            if (hp <= 0) {
+                hp = 0;
+                updateHUD();
+                gameOver();
+            }
+        }
+
+        function showGiantGreetingPopup(text, glowColor) {
+            const layer = document.getElementById('popup-layer');
+            layer.querySelectorAll('.giant-greeting-popup').forEach(n => n.remove());
+
+            const el = document.createElement('div');
+            el.className = 'giant-greeting-popup text-2xl sm:text-4xl font-black px-6 py-3 rounded-3xl bg-slate-950/95 border-4 border-amber-400 text-amber-300 shadow-2xl';
+            el.style.borderColor = glowColor || '#f59e0b';
+            el.innerText = text;
+            layer.appendChild(el);
+
+            setTimeout(() => { if (el.parentNode) el.parentNode.removeChild(el); }, 850);
+        }
+
+        function showJudgement(text, colorClasses) {
+            const layer = document.getElementById('popup-layer');
+            const el = document.createElement('div');
+            el.className = `judgement-text text-base sm:text-lg font-black px-3.5 py-1.5 rounded-full bg-slate-900/90 border shadow-lg ${colorClasses}`;
+            el.style.top = '62%';
+            el.innerText = text;
+            layer.appendChild(el);
+
+            setTimeout(() => { if (el.parentNode) el.parentNode.removeChild(el); }, 600);
+        }
+
+        function gameOver() {
+            isPlaying = false;
+            stopBGMSequencer();
+
+            const currentHigh = parseInt(localStorage.getItem('school_rhythm_highscore') || '0', 10);
+            if (score > currentHigh) {
+                localStorage.setItem('school_rhythm_highscore', score.toString());
+            }
+
+            document.getElementById('res-score').innerText = score.toLocaleString();
+            document.getElementById('res-combo').innerText = `${maxCombo} 회`;
+            document.getElementById('res-maxspeed').innerText = `SPEED x${maxSpeedMultiplier.toFixed(1)} ⚡`;
+
+            document.getElementById('overlay-gameover').classList.remove('hidden');
+        }
+
+        function animateLoop(timestamp) {
+            requestAnimationFrame(animateLoop);
+
+            if (mascotMesh) {
+                mascotMesh.rotation.y = Math.sin(Date.now() * 0.002) * 0.2;
+                mascotMesh.position.y = Math.sin(Date.now() * 0.004) * 0.15;
+            }
+
+            if (!isPlaying) {
+                renderer.render(scene, camera);
+                return;
+            }
+
+            const speedMult = getCurrentSpeedMultiplier();
+            const config = DIFFICULTIES[selectedDiffKey];
+            const currentInterval = Math.max(320, config.spawnInterval / (speedMult * 0.85));
+
+            if (timestamp - lastSpawnTime > currentInterval) {
+                spawnAdult();
+                lastSpawnTime = timestamp;
+            }
+
+            for (let i = adultMeshes.length - 1; i >= 0; i--) {
+                const adult = adultMeshes[i];
+                adult.z += adult.baseSpeed * speedMult;
+                
+                // 곡선 트랙에 맞추어 X 좌표와 회전 각도(Rotation) 동적 업데이트
+                const curveX = getTrackCurveOffset(adult.z);
+                const curveAngle = getTrackCurveAngle(adult.z);
+                
+                adult.group.position.x = curveX + LANE_X_POSITIONS[adult.lane] * Math.cos(curveAngle);
+                adult.group.position.z = adult.z;
+                adult.group.position.y = 1.2;
+                adult.group.rotation.y = curveAngle;
+
+                if (!adult.greeted && adult.z > TRACK_HIT_Z + 1.8) {
+                    adult.greeted = true;
+                    scene.remove(adult.group);
+                    combo = 0;
+                    deductHalfHeart();
+                    showJudgement("MISS! 💔", "text-rose-500 border-rose-600");
+                    playSound('miss');
+                    triggerHaptic([100, 50, 100]);
+                    updateHUD();
+                }
+
+                if (adult.z > TRACK_END_Z) {
+                    scene.remove(adult.group);
+                    adultMeshes.splice(i, 1);
+                }
+            }
+
+            renderer.render(scene, camera);
+        }
+    </script>
+</body>
+</html>
